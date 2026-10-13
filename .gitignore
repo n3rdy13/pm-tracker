@@ -1,0 +1,6 @@
+# Never commit retailer data or backups to this public repo
+*.json
+!manifest.webmanifest
+*.xlsx
+*.ics
+node_modules/

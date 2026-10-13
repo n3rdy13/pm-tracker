@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>PM Tracker</title>
+  <meta name="theme-color" content="#0f5c4f">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="PM Tracker">
+  <meta name="format-detection" content="telephone=no">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="vendor/leaflet.css">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-title">
+      <span class="logo" aria-hidden="true"></span>
+      <h1 id="view-title">Retailers</h1>
+    </div>
+    <button id="btn-locate" class="locate" aria-label="Update my location">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="7.5" fill="none"/></svg>
+      <span id="locate-label">Locate</span>
+    </button>
+  </header>
+
+  <div id="update-banner" class="update-banner" hidden>
+    New version ready. <button id="btn-update">Reload</button>
+  </div>
+
+  <main id="main">
+    <!-- LIST -->
+    <section id="view-list" class="view" data-title="Retailers">
+      <div id="welcome" class="card welcome" hidden>
+        <h2>Load your retailers</h2>
+        <p>Pick the <b>retailers file</b> you were sent (<code>retailers-881.json</code>), a backup file, or a PM report spreadsheet (.xlsx). Everything stays on this phone.</p>
+        <label class="btn primary block file-btn">Choose file…<input type="file" id="welcome-file" accept=".json,.xlsx,application/json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label>
+      </div>
+      <div id="list-content">
+        <div id="banners"></div>
+        <div id="summary" class="summary"></div>
+        <div class="searchbar">
+          <input id="search" type="search" placeholder="Search name, ID, city, address" autocomplete="off" autocorrect="off" spellcheck="false">
+        </div>
+        <div class="filters" id="filters">
+          <button data-f="all" class="chip on">All</button>
+          <button data-f="overdue" class="chip">Overdue</button>
+          <button data-f="never" class="chip">Never</button>
+          <button data-f="soon" class="chip">Due soon</button>
+          <button data-f="current" class="chip">Current</button>
+          <button data-f="geo" class="chip">Fix location</button>
+          <select id="tab-filter" class="chip-select" aria-label="Territory tab"><option value="">All tabs</option></select>
+        </div>
+        <div id="sort-note" class="sort-note"></div>
+        <ul id="list" class="rows"></ul>
+        <button id="more-rows" class="btn ghost block" hidden>Show more</button>
+      </div>
+    </section>
+
+    <!-- NEAR ME -->
+    <section id="view-near" class="view" data-title="Near Me" hidden>
+      <div class="card tight">
+        <div class="row-between">
+          <div id="near-loc" class="muted small">Location not found yet.</div>
+          <button id="near-refresh" class="btn small">Refresh</button>
+        </div>
+        <div class="controls">
+          <label>Within
+            <select id="near-radius">
+              <option value="5">5 mi</option><option value="10">10 mi</option><option value="25" selected>25 mi</option>
+              <option value="50">50 mi</option><option value="100">100 mi</option>
+            </select>
+          </label>
+          <label>Show
+            <select id="near-show"><option value="need" selected>Needs a visit</option><option value="all">All</option></select>
+          </label>
+        </div>
+      </div>
+      <div id="near-map" class="map"></div>
+      <div class="card tight">
+        <div class="row-between">
+          <label class="muted small">Auto-build a route with
+            <select id="auto-count"><option>5</option><option selected>9</option><option>18</option><option>27</option></select> stops
+          </label>
+          <button id="btn-auto" class="btn primary small">Build route</button>
+        </div>
+        <p class="muted tiny">Picks the nearest stores that need a visit, chaining from one to the next. Overdue stores get priority.</p>
+      </div>
+      <ul id="near-list" class="rows"></ul>
+    </section>
+
+    <!-- ROUTE -->
+    <section id="view-route" class="view" data-title="Route" hidden>
+      <div id="route-empty" class="card">
+        <h2>No route yet</h2>
+        <p class="muted">Add stores with the <b>+</b> button on any list, or use <b>Near Me → Build route</b>.</p>
+      </div>
+      <div id="route-body" hidden>
+        <div class="card tight">
+          <div class="seg" id="route-end">
+            <button data-end="last">End at last stop</button>
+            <button data-end="start">Return to start</button>
+            <button data-end="home">End at home</button>
+          </div>
+          <div id="route-stats" class="route-stats"></div>
+          <div class="btn-row">
+            <button id="btn-optimize" class="btn">Re-optimize order</button>
+            <button id="btn-clear-route" class="btn ghost danger-text">Clear route</button>
+          </div>
+        </div>
+        <div id="route-legs"></div>
+        <div id="route-map" class="map"></div>
+        <ol id="route-list" class="rows numbered"></ol>
+      </div>
+    </section>
+
+    <!-- MORE -->
+    <section id="view-more" class="view" data-title="More" hidden>
+      <div class="card">
+        <h2>Backup</h2>
+        <p id="backup-status" class="muted small"></p>
+        <div class="btn-row">
+          <button id="btn-backup" class="btn primary">Back up now</button>
+          <label class="btn file-btn">Restore…<input type="file" id="restore-file" accept=".json,application/json"></label>
+        </div>
+        <p class="muted tiny">Save the backup to iCloud Drive or Files, or email it to yourself. Restoring replaces everything on this phone.</p>
+      </div>
+
+      <div class="card">
+        <h2>Reminders</h2>
+        <p id="reminder-status" class="muted small"></p>
+        <div class="btn-row">
+          <button id="btn-ics" class="btn">Add due dates to Calendar</button>
+          <button id="btn-badge" class="btn">Enable icon badge</button>
+        </div>
+        <label class="field">Count a store as "due soon"
+          <select id="soon-days"><option value="14">14 days before</option><option value="30">30 days before</option><option value="45">45 days before</option></select>
+        </label>
+        <p class="muted tiny">Calendar export adds one all-day event per due date (listing the stores due that day) with an alert 14 days ahead and on the day. It only exports dates you haven't exported yet, so run it after a day of visits.</p>
+      </div>
+
+      <div class="card">
+        <h2>Retailers</h2>
+        <p id="data-status" class="muted small"></p>
+        <div class="btn-row">
+          <label class="btn file-btn">Import list or PM report…<input type="file" id="import-file" accept=".json,.xlsx,application/json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label>
+          <button id="btn-add" class="btn">Add retailer</button>
+        </div>
+        <div class="btn-row">
+          <button id="btn-show-archived" class="btn ghost">Show archived</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Home base</h2>
+        <p id="home-status" class="muted small"></p>
+        <div class="btn-row">
+          <button id="btn-home-set" class="btn">Set to my current location</button>
+          <button id="btn-home-clear" class="btn ghost">Clear</button>
+        </div>
+        <p class="muted tiny">Used for sorting when your location isn't available, and for "End at home" routes.</p>
+      </div>
+
+      <div class="card">
+        <h2>Settings</h2>
+        <label class="switch"><input type="checkbox" id="auto-locate"> Find my location when the app opens</label>
+        <label class="field">Open Google Maps with
+          <select id="maps-mode"><option value="app">Google Maps app</option><option value="web">Web link</option></select>
+        </label>
+        <p id="about" class="muted tiny"></p>
+      </div>
+
+      <div class="card danger">
+        <h2>Erase everything</h2>
+        <p class="muted small">Deletes all retailers, visits and notes from this phone. Back up first.</p>
+        <button id="btn-erase" class="btn danger">Erase all data</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- Detail panel -->
+  <section id="detail" class="panel" hidden aria-modal="true" role="dialog">
+    <div class="panel-head">
+      <button class="back" data-close="detail" aria-label="Back">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg> Back
+      </button>
+    </div>
+    <div id="detail-body" class="panel-body"></div>
+  </section>
+
+  <!-- Generic modal -->
+  <div id="modal" class="modal" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div id="modal-body"></div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <nav class="tabbar">
+    <button data-view="list" class="on"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>List</button>
+    <button data-view="near"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>Near Me</button>
+    <button data-view="route"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8.5 18H15a3.5 3.5 0 0 0 0-7H9a3.5 3.5 0 0 1 0-7h6.5"/></svg>Route<span id="route-count" class="count" hidden></span></button>
+    <button data-view="more"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>More</button>
+  </nav>
+
+  <script src="vendor/leaflet.js"></script>
+  <script src="vendor/xlsx.full.min.js" defer></script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
