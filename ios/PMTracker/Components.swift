@@ -1,5 +1,4 @@
 import SwiftUI
-import UniformTypeIdentifiers
 
 extension Color {
     init(light: UInt32, dark: UInt32) {
@@ -132,23 +131,7 @@ struct ToastOverlay: View {
     }
 }
 
-/// Wraps backup data for the system "Save to Files" sheet.
-struct JSONFile: FileDocument {
-    static var readableContentTypes: [UTType] { [.json] }
-    var data: Data
-
-    init(data: Data) { self.data = data }
-
-    init(configuration: ReadConfiguration) throws {
-        data = configuration.file.regularFileContents ?? Data()
-    }
-
-    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
-        FileWrapper(regularFileWithContents: data)
-    }
-}
-
-/// Reads a file picked with .fileImporter (handles the security-scoped URL).
+/// Reads a picked file (handles security-scoped URLs).
 func readPickedFile(_ url: URL) throws -> Data {
     let scoped = url.startAccessingSecurityScopedResource()
     defer { if scoped { url.stopAccessingSecurityScopedResource() } }

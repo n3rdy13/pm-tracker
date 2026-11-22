@@ -8,9 +8,6 @@ struct MoreView: View {
     @EnvironmentObject var location: LocationProvider
     @Environment(\.openURL) private var openURL
 
-    @State private var exporting = false
-    @State private var exportFile: JSONFile?
-    @State private var importing = false
     @State private var showArchived = false
     @State private var confirmErase = false
     @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
@@ -25,16 +22,6 @@ struct MoreView: View {
                 aboutSection
             }
             .navigationTitle("More")
-            .fileExporter(isPresented: $exporting, document: exportFile, contentType: .json, defaultFilename: "pm-tracker-backup-\(Day.today)") { result in
-                switch result {
-                case .success:
-                    store.markBackedUp()
-                    store.show("Backup saved")
-                case .failure(let e):
-                    store.show(e.localizedDescription)
-                }
-            }
-            .importFlow(isPresented: $importing)
             .sheet(isPresented: $showArchived) { ArchivedSheet() }
             .task { await refreshNotificationStatus() }
         }
@@ -94,16 +81,11 @@ struct MoreView: View {
         let summary = "\(lastText) · \(store.state.meta.changesSinceBackup) changes since. \(act.count) active retailers, \(visits) visits, \(weak) with approximate or missing locations. Data stays on this phone, so back up to iCloud Drive now and then."
         return Section {
             Button {
-                do {
-                    exportFile = JSONFile(data: try store.backupData())
-                    exporting = true
-                } catch {
-                    store.show(error.localizedDescription)
-                }
+                store.startBackup()
             } label: {
                 Label("Back up now", systemImage: "square.and.arrow.up")
             }
-            Button { importing = true } label: { Label("Restore backup or import retailer list", systemImage: "square.and.arrow.down") }
+            Button { store.startImport() } label: { Label("Restore backup or import retailer list", systemImage: "square.and.arrow.down") }
             Button { showArchived = true } label: { Label("Archived retailers (\(all.count - act.count))", systemImage: "archivebox") }
         } header: {
             Text("Data")

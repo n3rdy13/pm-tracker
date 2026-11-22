@@ -16,15 +16,20 @@ enum ImportedFile {
 }
 
 enum ImportError: LocalizedError {
-    case unrecognized
-    var errorDescription: String? { "That file isn't a PM Tracker backup or retailer list." }
+    case unrecognized, empty
+    var errorDescription: String? {
+        switch self {
+        case .unrecognized: return "That file isn't a PM Tracker backup or retailer list."
+        case .empty: return "The file is empty."
+        }
+    }
 }
 
 /// All app data, saved as one JSON file on the phone. Shared by the app and the Siri commands.
 @MainActor
 final class Store: ObservableObject {
     static let shared = Store()
-    static let appVersion = "2.0"
+    static let appVersion = "2.0.1"
 
     @Published private(set) var state = AppState()
     @Published private(set) var here: Coord?
@@ -32,6 +37,8 @@ final class Store: ObservableObject {
     @Published private(set) var hereTime: Date?
     @Published private(set) var locating = false
     @Published var toast: Toast?
+    @Published var pendingBackup: Backup?
+    @Published var alertMessage: String?
 
     private let fileURL: URL
     private var reminderTask: Task<Void, Never>?
@@ -365,14 +372,87 @@ final class Store: ObservableObject {
         commit(changed: false)
     }
 
-    func readImport(_ data: Data) throws -> ImportedFile {
-        struct Header: Decodable { var type: String? }
-        let header = try? JSONDecoder().decode(Header.self, from: data)
-        switch header?.type {
-        case "pm-tracker-backup": return .backup(try JSONDecoder().decode(Backup.self, from: data))
-        case "pm-tracker-retailers": return .list(try JSONDecoder().decode(RetailerList.self, from: data).retailers)
-        default: throw ImportError.unrecognized
+    func readImport(_ raw: Data) throws -> ImportedFile {
+        var data = raw
+        if data.starts(with: [0xEF, 0xBB, 0xBF]) { data = Data(data.dropFirst(3)) }   // UTF-8 byte-order mark
+        guard !data.isEmpty else { throw ImportError.empty }
+        struct AnyDecodable: Decodable { init(from decoder: Decoder) throws {} }
+        struct Header: Decodable {
+            var type: String?
+            var state: [String: AnyDecodable]?
+            var retailers: [AnyDecodable]?
         }
+        let header = try JSONDecoder().decode(Header.self, from: data)
+        if header.type == "pm-tracker-backup" || (header.type == nil && header.state != nil) {
+            return .backup(try JSONDecoder().decode(Backup.self, from: data))
+        }
+        if header.type == "pm-tracker-retailers" || (header.type == nil && header.retailers != nil) {
+            return .list(try JSONDecoder().decode(RetailerList.self, from: data).retailers)
+        }
+        throw ImportError.unrecognized
+    }
+
+    /// Opens the file picker and imports a backup or retailer list.
+    func startImport() {
+        FilePicker.shared.pickFile { [weak self] url in
+            self?.importFile(at: url)
+        }
+    }
+
+    func importFile(at url: URL) {
+        do {
+            let data = try readPickedFile(url)
+            switch try readImport(data) {
+            case .backup(let b):
+                if hasData { pendingBackup = b } else { applyBackup(b) }
+            case .list(let list):
+                let r = merge(list)
+                show("Imported: \(r.added) new, \(r.updated) updated")
+            }
+        } catch {
+            alertMessage = "Couldn't import \"\(url.lastPathComponent)\".\n\n\(describe(error))"
+        }
+    }
+
+    func applyBackup(_ b: Backup) {
+        restore(b)
+        let v = b.state.retailers.values.reduce(0) { $0 + $1.visits.count }
+        show("Restored \(b.state.retailers.count) retailers and \(v) visits")
+        Task {
+            _ = await requestReminders()
+            LocationProvider.shared.requestWhenInUse()
+        }
+    }
+
+    /// Opens "Save to Files" with a backup.
+    func startBackup() {
+        do {
+            let data = try backupData()
+            try FilePicker.shared.export(data, filename: "pm-tracker-backup-\(today).json") { [weak self] saved in
+                guard saved else { return }
+                self?.markBackedUp()
+                self?.show("Backup saved")
+            }
+        } catch {
+            alertMessage = "Couldn't make a backup.\n\n\(describe(error))"
+        }
+    }
+
+    private func describe(_ error: Error) -> String {
+        func path(_ c: DecodingError.Context) -> String {
+            let p = c.codingPath.map(\.stringValue).joined(separator: " › ")
+            return p.isEmpty ? "the top of the file" : p
+        }
+        if let e = error as? DecodingError {
+            switch e {
+            case .dataCorrupted(let c): return "The file isn't readable JSON. (\(c.debugDescription))"
+            case .keyNotFound(let k, let c): return "Missing \"\(k.stringValue)\" at \(path(c))."
+            case .typeMismatch(_, let c): return "Unexpected value at \(path(c)). \(c.debugDescription)"
+            case .valueNotFound(_, let c): return "Missing value at \(path(c)). \(c.debugDescription)"
+            @unknown default: return String(describing: e)
+            }
+        }
+        return error.localizedDescription
     }
 
     func restore(_ b: Backup) {

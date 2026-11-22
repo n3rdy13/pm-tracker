@@ -22,7 +22,6 @@ struct RetailerListView: View {
     @State private var filter: ListFilter = .all
     @State private var tab = ""
     @State private var query = ""
-    @State private var importing = false
     @State private var adding = false
 
     var body: some View {
@@ -50,7 +49,6 @@ struct RetailerListView: View {
                 }
             }
             .sheet(isPresented: $adding) { AddRetailerSheet() }
-            .importFlow(isPresented: $importing)
             .navigationDestination(for: String.self) { id in RetailerDetailView(id: id) }
         }
     }
@@ -63,7 +61,7 @@ struct RetailerListView: View {
                 Text("2. Tap **Import backup** below and pick that file. Your retailers, visits, notes and fixed locations all come across.")
                 Text("You can also import a retailer list file (retailers-881.json).").foregroundStyle(.secondary)
                 Button {
-                    importing = true
+                    store.startImport()
                 } label: {
                     Label("Import backup", systemImage: "square.and.arrow.down").frame(maxWidth: .infinity)
                 }
@@ -209,62 +207,5 @@ struct Banners: View {
                 }
             }
         }
-    }
-}
-
-// MARK: - Import (backup restore or retailer list merge)
-
-struct ImportFlow: ViewModifier {
-    @EnvironmentObject var store: Store
-    @Binding var isPresented: Bool
-    @State private var pending: Backup?
-
-    func body(content: Content) -> some View {
-        content
-            .fileImporter(isPresented: $isPresented, allowedContentTypes: [.json, .data]) { result in
-                switch result {
-                case .failure(let e):
-                    store.show(e.localizedDescription)
-                case .success(let url):
-                    do {
-                        let file = try store.readImport(try readPickedFile(url))
-                        switch file {
-                        case .backup(let b):
-                            if store.hasData { pending = b } else { apply(b) }
-                        case .list(let list):
-                            let r = store.merge(list)
-                            store.show("Imported: \(r.added) new, \(r.updated) updated")
-                        }
-                    } catch {
-                        store.show(error.localizedDescription)
-                    }
-                }
-            }
-            .alert("Replace everything?", isPresented: Binding(get: { pending != nil }, set: { if !$0 { pending = nil } })) {
-                Button("Replace", role: .destructive) { if let b = pending { apply(b) }; pending = nil }
-                Button("Cancel", role: .cancel) { pending = nil }
-            } message: {
-                if let b = pending {
-                    let n = b.state.retailers.count
-                    let v = b.state.retailers.values.reduce(0) { $0 + $1.visits.count }
-                    Text("This replaces all \(store.state.retailers.count) retailers on this phone with the backup (\(n) retailers, \(v) visits).")
-                }
-            }
-    }
-
-    private func apply(_ b: Backup) {
-        store.restore(b)
-        let v = b.state.retailers.values.reduce(0) { $0 + $1.visits.count }
-        store.show("Restored \(b.state.retailers.count) retailers and \(v) visits")
-        Task {
-            _ = await store.requestReminders()
-            LocationProvider.shared.requestWhenInUse()
-        }
-    }
-}
-
-extension View {
-    func importFlow(isPresented: Binding<Bool>) -> some View {
-        modifier(ImportFlow(isPresented: isPresented))
     }
 }

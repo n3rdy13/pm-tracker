@@ -27,6 +27,7 @@ struct RootView: View {
     @EnvironmentObject var store: Store
 
     var body: some View {
+        ZStack {
         TabView {
             RetailerListView()
                 .tabItem { Label("Retailers", systemImage: "list.bullet") }
@@ -39,5 +40,26 @@ struct RootView: View {
                 .tabItem { Label("More", systemImage: "ellipsis.circle") }
         }
         .overlay { ToastOverlay() }
+        .alert("Import problem", isPresented: Binding(get: { store.alertMessage != nil }, set: { if !$0 { store.alertMessage = nil } })) {
+            Button("OK", role: .cancel) { store.alertMessage = nil }
+        } message: {
+            Text(store.alertMessage ?? "")
+        }
+        }
+        .alert("Replace everything?", isPresented: Binding(get: { store.pendingBackup != nil }, set: { if !$0 { store.pendingBackup = nil } })) {
+            Button("Replace", role: .destructive) {
+                if let b = store.pendingBackup { store.applyBackup(b) }
+                store.pendingBackup = nil
+            }
+            Button("Cancel", role: .cancel) { store.pendingBackup = nil }
+        } message: {
+            Text(replaceMessage)
+        }
+    }
+
+    private var replaceMessage: String {
+        guard let b = store.pendingBackup else { return "" }
+        let v = b.state.retailers.values.reduce(0) { $0 + $1.visits.count }
+        return "This replaces all \(store.state.retailers.count) retailers on this phone with the backup (\(b.state.retailers.count) retailers, \(v) visits)."
     }
 }
