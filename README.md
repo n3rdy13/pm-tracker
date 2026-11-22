@@ -1,5 +1,7 @@
 # PM Tracker
 
+> **New: native iPhone app with Siri** — see [`ios/`](ios/README.md). It replaces the web app below; bring your data over with a backup file.
+
 A phone web app for tracking 6-month preventative-maintenance (PM) visits to retailers and routing them through Google Maps.
 
 - **All data stays on the phone** (IndexedDB). This repo holds only the app code — never commit retailer lists or backups (`.gitignore` blocks `*.json`, `*.xlsx`).
