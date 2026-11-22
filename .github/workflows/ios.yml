@@ -24,6 +24,11 @@ jobs:
         with:
           xcode-version: latest-stable
 
+      - name: Check app logic (backup import, dates, routes, links)
+        run: |
+          xcrun -sdk macosx swiftc -O -o /tmp/pmcheck PMTracker/Models.swift PMTracker/Logic.swift Tests/main.swift
+          /tmp/pmcheck
+
       - name: Generate Xcode project
         run: |
           brew install xcodegen
