@@ -1,0 +1,42 @@
+name: PMTracker
+options:
+  bundleIdPrefix: com.jamesw
+  deploymentTarget:
+    iOS: "18.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "2.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  PMTracker:
+    type: application
+    platform: iOS
+    sources:
+      - path: PMTracker
+    info:
+      path: PMTracker/Info.plist
+      properties:
+        CFBundleDisplayName: PM Tracker
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        LSApplicationQueriesSchemes:
+          - comgooglemaps
+        NSLocationWhenInUseUsageDescription: PM Tracker uses your location to show the closest retailers, sort by distance, and build routes.
+        NSLocationAlwaysAndWhenInUseUsageDescription: Choose Always so Siri can tell you which stores are near you and mark the store you're at done without opening the app.
+        ITSAppUsesNonExemptEncryption: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.jamesw.pmtracker
+        PRODUCT_NAME: PMTracker
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_PREVIEWS: NO
+    scheme: {}

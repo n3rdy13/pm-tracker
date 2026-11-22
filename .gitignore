@@ -4,3 +4,7 @@
 *.xlsx
 *.ics
 node_modules/
+!ios/**/Contents.json
+ios/*.xcodeproj/
+ios/build/
+ios/PMTracker/Info.plist

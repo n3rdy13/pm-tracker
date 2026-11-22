@@ -1,0 +1,65 @@
+name: Build iOS App
+
+on:
+  push:
+    branches: [main, ios-app]
+    paths:
+      - "ios/**"
+      - ".github/workflows/ios.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: ios
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      # Unsigned on purpose: sign it on your phone (ESign, Feather, etc.) or with Sideloadly using your developer certificate.
+      - name: Build unsigned IPA
+        run: |
+          set -eo pipefail
+          xcodebuild \
+            -project PMTracker.xcodeproj \
+            -scheme PMTracker \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee build.log | grep -E "error:|warning: .*(deprecated|will never)|BUILD (SUCCEEDED|FAILED)" || true
+          test -d build/Build/Products/Release-iphoneos/PMTracker.app || { grep -E "error:" build.log | head -50; exit 1; }
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/PMTracker.app Payload/
+          zip -qry PMTracker-unsigned.ipa Payload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PMTracker-unsigned
+          path: ios/PMTracker-unsigned.ipa
+
+      # Keeps one always-current download link:
+      # https://github.com/<you>/pm-tracker/releases/download/ios-latest/PMTracker-unsigned.ipa
+      - name: Publish to the ios-latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete ios-latest --yes --cleanup-tag || true
+          gh release create ios-latest PMTracker-unsigned.ipa \
+            --target "$GITHUB_SHA" \
+            --title "PM Tracker for iPhone (latest build)" \
+            --notes "Unsigned IPA built from ${GITHUB_SHA::7} on branch ${GITHUB_REF_NAME}. Sign it with your developer certificate (ESign, Feather, Sideloadly, etc.) and install."
