@@ -100,9 +100,9 @@ var a = Retailer(id: "1", name: "A", address: "100 MAIN ST", city: "OZARK", tab:
 var m = Retailer(id: "2", name: "B", address: "5 ELM", city: "NIXA", tab: "")
 m.lat = 37.05; m.lng = -93.29; m.geo = "manual"
 let app = GoogleMaps.appURL([.retailer(a), .retailer(m)])?.absoluteString ?? ""
-check(app == "comgooglemaps://?daddr=100%20MAIN%20ST,OZARK,MO+to:37.05,-93.29&directionsmode=driving", "app link: \(app)")
+check(app == "comgooglemaps://?daddr=100%20MAIN%20ST,%20OZARK,%20MO+to:37.05,-93.29&directionsmode=driving", "app link: \(app)")
 let webURL = GoogleMaps.webURL([.retailer(a), .retailer(m), .point(Coord(lat: 37.1, lng: -93.25), "Home")], navigate: true)?.absoluteString ?? ""
-check(webURL == "https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=37.1,-93.25&waypoints=100%20MAIN%20ST,OZARK,MO%7C37.05,-93.29&dir_action=navigate", "web link: \(webURL)")
+check(webURL == "https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=37.1,-93.25&waypoints=100%20MAIN%20ST,%20OZARK,%20MO%7C37.05,-93.29&dir_action=navigate", "web link: \(webURL)")
 
 // 6. Spoken retailer numbers.
 check(digitsFromSpeech("one two three four five six") == "123456", "spoken digits")
